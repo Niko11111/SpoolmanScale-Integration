@@ -13,17 +13,14 @@ so it runs on the machine the server runs on.
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
-import ssl
 import sys
-import urllib.error
-import urllib.request
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import inventory_rules as rules  # noqa: E402
+from httpcheck import Client, Report, auth_from  # noqa: E402
 
 # A UID no chip carries, in the spelling the scale sends (section 5).
 TEST_UID = "04:CC:CC:CC:CC:CC:01"
@@ -32,123 +29,10 @@ PATCH_TEST_WEIGHT_G = 500
 MEASURE_TEST_NET_G = 600
 UNKNOWN_ID_OFFSET = 100000       # above the highest id seen: an id that does not exist
 DEFAULT_TIMEOUT_S = 10.0
-MAX_FINDINGS_SHOWN = 5
 
 LIST_ACTIVE = "/api/v1/spool?allow_archived=false"
 LIST_ALL = "/api/v1/spool?allow_archived=true"
 LIST_STAMP = "/api/v1/spool?allow_archived=false&limit=1&sort=id:desc"
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Hands a 3xx back as the answer: the scale never follows one."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-class Response:
-    def __init__(self, status: int, headers: Dict[str, str], body: bytes):
-        self.status = status
-        self.headers = {k.lower(): v for k, v in headers.items()}
-        self.body = body
-
-    @property
-    def json(self) -> Any:
-        try:
-            return json.loads(self.body.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
-            return None
-
-    def __str__(self) -> str:
-        text = self.body.decode("utf-8", "replace").strip()
-        return f"HTTP {self.status} {text[:160]}"
-
-
-class Client:
-    """Talks like the scale: header auth, no redirects, identity encoding."""
-
-    def __init__(self, base: str, auth: Optional[Dict[str, str]], timeout: float, insecure: bool):
-        self.base = base.rstrip("/")
-        self.auth = auth
-        self.timeout = timeout
-        self.seen: List[Tuple[str, str, int]] = []   # (method, path, status), for rule 11
-        handlers: List[Any] = [NoRedirect()]
-        if insecure:
-            handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))
-        self.opener = urllib.request.build_opener(*handlers)
-
-    def _add_auth(self, req: urllib.request.Request) -> None:
-        if not self.auth:
-            return
-        kind, secret = self.auth["kind"], self.auth["secret"]
-        if kind == "key":
-            req.add_header("X-API-Key", secret)
-        elif kind == "bearer":
-            req.add_header("Authorization", "Bearer " + secret)
-        elif kind == "basic":
-            req.add_header("Authorization", "Basic " + base64.b64encode(secret.encode()).decode())
-
-    def request(self, method: str, path: str, body: Any = None, with_auth: bool = True) -> Response:
-        req = urllib.request.Request(self.base + path, method=method)
-        req.add_header("Accept-Encoding", "identity")
-        data = None
-        if body is not None:
-            data = json.dumps(body).encode("utf-8")
-            req.add_header("Content-Type", "application/json")
-        if with_auth:
-            self._add_auth(req)
-        response = self._send(req, data)
-        self.seen.append((method, path, response.status))
-        return response
-
-    def _send(self, req: urllib.request.Request, data: Optional[bytes]) -> Response:
-        try:
-            with self.opener.open(req, data=data, timeout=self.timeout) as resp:
-                return Response(resp.status, dict(resp.headers), resp.read())
-        except urllib.error.HTTPError as err:
-            return Response(err.code, dict(err.headers), err.read())
-        except (urllib.error.URLError, OSError, ValueError) as err:
-            return Response(0, {}, str(err).encode("utf-8"))
-
-    def get(self, path: str, with_auth: bool = True) -> Response:
-        return self.request("GET", path, None, with_auth)
-
-
-class Report:
-    def __init__(self, verbose: bool):
-        self.verbose = verbose
-        self.failed = 0
-        self.warned = 0
-
-    def _line(self, mark: str, number: Any, title: str, detail: Any) -> None:
-        print(f"{mark:<5}{str(number):>3}  {title}")
-        if detail and (mark != "ok" or self.verbose):
-            for line in str(detail).splitlines():
-                print(f"          {line}")
-
-    def must(self, number: Any, title: str, ok: bool, detail: Any = "") -> None:
-        if not ok:
-            self.failed += 1
-        self._line("ok" if ok else "FAIL", number, title, detail)
-
-    def should(self, number: Any, title: str, ok: bool, detail: Any = "") -> None:
-        if not ok:
-            self.warned += 1
-        self._line("ok" if ok else "warn", number, title, detail)
-
-    def skip(self, number: Any, title: str, why: str) -> None:
-        self._line("skip", number, title, why)
-
-    def findings(self, number: Any, title: str, found: List[rules.Finding]) -> None:
-        musts = sorted({m for level, m in found if level == "must"})
-        shoulds = sorted({m for level, m in found if level == "should"})
-        detail = "\n".join((musts + shoulds)[:MAX_FINDINGS_SHOWN])
-        if musts:
-            self.must(number, title, False, detail)
-        elif shoulds:
-            self.should(number, title, False, detail)
-        else:
-            self.must(number, title, True)
 
 
 class Run:
@@ -247,7 +131,7 @@ class Run:
         self.r.must(10, title, resp.status in (401, 403), str(resp))
 
     def redirects(self) -> None:
-        hits = [f"{m} {p} -> {s}" for m, p, s in self.c.seen if 300 <= s < 400]
+        hits = self.c.redirects_seen()
         self.r.must(11, "no request above was answered with a redirect", not hits, "\n".join(hits))
 
     def stamp(self) -> None:
@@ -399,14 +283,6 @@ def parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def auth_from(args: argparse.Namespace) -> Optional[Dict[str, str]]:
-    for kind in ("key", "bearer", "basic"):
-        secret = getattr(args, kind)
-        if secret:
-            return {"kind": kind, "secret": secret}
-    return None
-
-
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     if not args.base.startswith(("http://", "https://")):
@@ -420,7 +296,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         run.all()
     finally:
         run.restore()
-    print(f"\n{report.failed} MUST failed, {report.warned} SHOULD warnings")
+    print(report.summary())
     return 1 if report.failed else 0
 
 

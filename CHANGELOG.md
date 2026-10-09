@@ -14,4 +14,7 @@ joined.
 
 ## Part 2: AMS source
 
-Not published yet. It arrives with the firmware release that uses it.
+### Draft (2026-10-09)
+
+- First draft, not binding: it describes a firmware feature that is not
+  released yet and may change without a version bump until it ships.

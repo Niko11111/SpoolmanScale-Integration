@@ -11,7 +11,7 @@ live in the firmware.
 | You build | Read | Status |
 |---|---|---|
 | a filament inventory | [common rules](common.md), then [Part 1: Inventory](inventory/spec.md) | version 1, firmware 0.8.2 and later |
-| a bridge that knows the printer and its AMS | Part 2: AMS source | in preparation, published with the firmware release that uses it |
+| a bridge that knows the printer and its AMS | [common rules](common.md), then [Part 2: AMS source](ams-source/spec.md) | draft, binding with the firmware release that uses it |
 | both in one server | both parts | |
 
 The parts are versioned separately, see [Parts and versions](common.md#parts-and-versions).
@@ -19,8 +19,9 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Check your server
 
-`check/check_inventory.py` runs the checklist at the end of Part 1 against a
-server. Python 3.9 or later, nothing to install.
+`check/check_inventory.py` and `check/check_ams_source.py` run the checklist
+at the end of each part against a server. Python 3.9 or later, nothing to
+install.
 
 ```bash
 # read-only: everything the scale reads
@@ -32,6 +33,9 @@ python3 check/check_inventory.py http://inventory.local:7912 --write --spool 12 
 
 # with a key, or --bearer TOKEN, or --basic USER:PASSWORD
 python3 check/check_inventory.py https://inv.example --key YOUR_KEY
+
+# an AMS source, read-only; add --write --printer 1 --spool A --spool-b B for the assign round
+python3 check/check_ams_source.py http://bridge.local:8001
 ```
 
 Exit code 0 means every MUST passed. SHOULD findings print as warnings.

@@ -11,7 +11,7 @@ The key words MUST, SHOULD and MAY are used as in RFC 2119. Sections marked
 | Part | Covers | Version | Firmware |
 |---|---|---|---|
 | 1, [Inventory](inventory/spec.md) | spools, filaments, tags, weights: a subset of the Spoolman 0.27 REST API | 1 | 0.8.2 and later |
-| 2, AMS source | printers, their AMS units and trays, assigning a spool to a tray | in preparation | not released |
+| 2, [AMS source](ams-source/spec.md) | printers, their AMS units and trays, assigning a spool to a tray | draft | not released |
 
 - Each part has its own version, an integer. A change that breaks an existing
   server gets a new version and an entry in [CHANGELOG.md](CHANGELOG.md), and
@@ -92,8 +92,9 @@ The scale learns what a server can do by asking, not from a version number.
   (`GET /api/v1/tag/reader`, `GET /api/v1/field/spool`) whose `200` or `404`
   is cached per server. A server that speaks the Spoolman API announces
   nothing.
-- Part 2: a route of its own under the part's prefix, answering version and
-  capabilities. Defined in Part 2.
+- Part 2: `GET /api/v1/ams-source`, the part's prefix itself, answers version,
+  server name and capabilities, and MAY name the inventory it books against.
+  Asked once per address.
 
 ## Errors
 
