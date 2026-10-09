@@ -11,6 +11,12 @@ joined.
 
 - First published version. Describes firmware 0.8.2 and later, checked
   against Spoolman 0.27.0.
+- 2026-10-09, firmware 0.8.3: section 6.4, the filament database in two
+  forms (Spoolman's whole list and search, or the light form with
+  `GET /api/v1/external/manufacturer` and a filtered
+  `GET /api/v1/external/filament`), and section 6.5, creating a maker, a
+  filament and a spool. Both optional for a server, so the version stays 1.
+  Checklist items 15 to 17.
 
 ## Part 2: AMS source
 

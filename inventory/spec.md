@@ -1,8 +1,9 @@
 # Part 1: Inventory
 
 **Contract version 1.** Describes firmware 0.8.2 and later, checked against
-Spoolman 0.27.0. The [common rules](../common.md) apply throughout. Questions
-and corrections: open an issue in this repository.
+Spoolman 0.27.0; sections 6.4 and 6.5 joined with firmware 0.8.3. The
+[common rules](../common.md) apply throughout. Questions and corrections: open
+an issue in this repository.
 
 SpoolmanScale is a filament scale with an NFC reader. In Spoolman mode it talks
 to a server over the Spoolman REST API. This page lists exactly what it uses,
@@ -314,6 +315,136 @@ the connection screen, for the count alone.
 `GET /api/v1/location` -> array of strings, e.g. `["Shelf A", "Dry box"]`. The
 scale sets a location by picking from this list.
 
+### 6.4 Filament database
+
+*Firmware 0.8.3 and later.*
+
+A spool without a maker's chip gets its filament from the server's filament
+database: the user picks maker, material, product line and colour on the
+scale, the scale fills a new filament from the entry and books the spool under
+it (6.5). The same database completes what a Bambu Lab tag does not say. A
+server SHOULD offer one. Without it the "New from database" tile does not
+appear, and a Bambu Lab tag is created from the tag's own values.
+
+The scale needs three things from a database: an index of makers and their
+materials, every entry of one maker and material, and the entries that could
+match a tag. Two forms deliver them. A server offers one of them. Spoolman
+0.27 offers the first; a server with a catalogue of its own finds the second
+cheaper, since it needs no copy of the whole database and no word search.
+
+| The scale needs | Spoolman form | Light form |
+|---|---|---|
+| index of makers and materials | `GET /api/v1/external/filament`, the whole database, read once a week; the scale keeps makers and materials | `GET /api/v1/external/manufacturer?diameter=1.75`, one small answer |
+| entries of one maker and material | `GET /api/v1/external/filament/search?query=<maker material>&limit=100&offset=N`, pages | `GET /api/v1/external/filament?manufacturer=<name>&material=<name>&diameter=1.75` |
+| entries for a tag | the search, with product line or colour name as words | the same filtered list; the scale compares locally |
+| density of a material | `GET /api/v1/external/material` | `GET /api/v1/external/material`, optional |
+
+**Discovery.** Once per address, and again after a change of address or
+backend:
+
+1. `GET /api/v1/external/manufacturer` -> `200`: light form.
+2. else `GET /api/v1/external/filament/search?limit=1&query=PLA` -> `200`:
+   Spoolman form.
+3. else no database. A server without one MUST answer `404` (or `405`) on
+   both. Any other failure is treated as temporary and asked again later.
+
+**Spoolman form**, as Spoolman 0.27.0 serves it:
+
+- `GET /api/v1/external/filament` -> array of every entry. It MAY be large
+  (SpoolmanDB: 8120 entries, 3 MB); chunked transfer is fine. The scale reads
+  it in one pass and keeps only `manufacturer`, `material`, `name` and
+  `diameter`.
+- `GET /api/v1/external/filament/search?query=<words>&limit=N&offset=M` ->
+  array of entries. Every word of `query` MUST match in `manufacturer`, `name`
+  or `material`, case-insensitive (all words, in any field); `limit` up to 100
+  and `offset` MUST be honoured. The scale asks 100 at a time, at most 20
+  pages, and filters the hits to the exact maker and material itself.
+- `GET /api/v1/external/material` -> array of
+  `{"material": "PLA", "density": 1.24, "extruder_temp": 210, "bed_temp": 50}`.
+  The scale asks it for a density when no entry of the material has one.
+
+**Light form:**
+
+- `GET /api/v1/external/manufacturer` -> array, one object per maker:
+
+  ```json
+  [{"name": "Polymaker", "count": 444,
+    "materials": [{"name": "PLA", "count": 224}, {"name": "ABS", "count": 31}]}]
+  ```
+
+  `name` MUST be unique and spelled as the entries spell `manufacturer`;
+  `materials[].name` as the entries spell `material`. `count` SHOULD be the
+  number of entries the list below returns. With `diameter=1.75` a server
+  SHOULD leave out the other diameters; one that ignores the parameter still
+  works, the scale filters.
+- `GET /api/v1/external/filament?manufacturer=<name>&material=<name>` -> array
+  of every entry of that maker and material, complete, in one answer. The
+  server MUST filter by both, exact and case-insensitive, and SHOULD honour
+  `diameter`. One maker's material rarely has more than a few hundred entries.
+- `GET /api/v1/external/material` MAY exist. Without it, an entry without a
+  density takes the density of another entry of the same material in the list;
+  without any, the scale does not create the filament (the inventory requires
+  a density, 6.5).
+
+**The entry**, in both forms, with the levels the scale needs:
+
+| Field | Level | Content |
+|---|---|---|
+| `id` | MUST | string, unique and stable, up to 79 bytes; the scale stores it as the filament's `external_id` (6.5) |
+| `manufacturer` | MUST | the maker, spelled as the index spells it, up to 31 bytes |
+| `material` | MUST | `PLA`, `PETG`, as the index spells it, up to 16 bytes |
+| `name` | MUST | product line and colour, without maker and material: `Panchroma Luminous Blue`, `Tough+ Cyan`; up to 95 bytes |
+| `color_hex` | SHOULD | `RRGGBB`, or `AARRGGBB` for a see-through colour, no `#`. An entry without a colour is not listed |
+| `diameter` | SHOULD | mm; absent reads as 1.75. The scale lists 1.75 mm only |
+| `density` | SHOULD | g/cm³ |
+| `weight` | SHOULD | net grams on a full spool. One entry per weight a product is sold in; the scale asks which |
+| `spool_weight` | SHOULD | the empty spool in grams; absent or 0 means unknown, and the spool counts as full when weighed (4.4) |
+| `extruder_temp`, `bed_temp` | SHOULD | °C, integers |
+| `color_hexes`, `multi_color_direction` | MAY | two or more `RRGGBB` for a gradient or dual colour spool; `coaxial` is side by side, `longitudinal` along the filament |
+| `line` | MAY | the product line on its own: `Matte`, `PolyTerra`, up to 24 bytes. With two or more lines in a list the scale asks for the line first and shows a name without its leading line |
+| anything else | ignored | `translucent`, `glow`, `finish`, `pattern`, `spool_type` cost bandwidth only |
+
+The scale keeps at least 400 makers, 640 pairs of maker and material and 600
+entries per list; beyond that it cuts in the order received, so order a list
+by name. Text is cut at the byte counts above, on character boundaries. The
+database's spelling is kept on the server; trademark signs and a "(Formerly
+...)" note are hidden on the screen only.
+
+A reference of the light form:
+[`examples/light_form_proxy.py`](../examples/light_form_proxy.py) serves it
+from a list of entries in front of any inventory server, and passes the
+checker.
+
+### 6.5 Creating a filament and its spool
+
+*Firmware 0.8.3 and later.*
+
+When the scale creates a spool, from a Bambu Lab tag or from the database
+(6.4), it finds or creates the maker and the filament first, then books the
+spool and links the tag (5). A server SHOULD offer this. Without it the user
+confirms the new spool and then sees the server refuse it.
+
+In order, each `200` (or `201` on a create) with the object, `id` included:
+
+| Step | Request |
+|---|---|
+| find the maker | `GET /api/v1/vendor?name="<exact>"` -> array. The scale compares `name` itself, case-insensitive, so a partial match is harmless |
+| create the maker | `POST /api/v1/vendor` `{"name": "Polymaker", "empty_spool_weight": 140}` (the weight only when known) |
+| find the filament, first hit wins, lowest `id` | `GET /api/v1/filament?article_number="<exact>"` for a tag with one, among the hits the maker's; `GET /api/v1/filament?external_id="<id>"` for a database entry; else `GET /api/v1/filament?vendor.name="<exact>"&material="<exact>"`, with `&color_hex=RRGGBB&color_similarity_threshold=0` for a single colour, and the scale compares name and colours itself |
+| create the filament | `POST /api/v1/filament` with `name`, `vendor_id`, `material`, `density`, `diameter`, and `color_hex` or `multi_color_hexes` (comma list) with `multi_color_direction`; where known `weight`, `spool_weight`, `article_number`, `external_id`, `settings_extruder_temp`, `settings_bed_temp` |
+| create the spool | `POST /api/v1/spool` as in 7.2, with `filament_id` |
+
+- `density` and `diameter` are always sent: Spoolman requires them. Without a
+  density from tag, database or material list the scale does not create the
+  filament.
+- A server MUST store `article_number` and `external_id` as given and filter
+  by them exactly: that is how the scale avoids a second filament for the same
+  product. A find answers `200` with `[]` when nothing matches, never `404`.
+- The quotes in `?name="..."` ask Spoolman for an exact match. A server that
+  does not know the quoting matches the bare text; the scale compares anyway.
+- `GET /api/v1/vendor` without a filter is also read, to list the makers the
+  inventory already has first. Without it only that order is lost.
+
 ## 7. Optional
 
 ### 7.1 Extra fields
@@ -400,6 +531,16 @@ anything is written to a spool the scale reads that spool again.
 filters while reading, so extra fields it does not need cost bandwidth, not
 memory.
 
+**Database (6.4).** The form is probed when the picker is first opened or a
+tag needs the database, and remembered until the address or backend changes.
+The index stays in RAM for a day; in the Spoolman form it is also kept in
+flash for a week, bound to the address, so the whole list is read once a week
+at most. The light form's index is read on each day's first opening. A list of
+entries is loaded when its maker and material are picked and dropped when the
+picker closes. Reads give the server 15 s per chunk; the whole list on a slow
+link takes as long as it takes. Makers the inventory already has
+(`GET /api/v1/vendor`) are listed first; that is asked on every index load.
+
 ## 9. Checklist
 
 `check/check_inventory.py` in this repository runs this list against a server
@@ -430,6 +571,19 @@ SHOULD:
 13. `GET /api/v1/spool?allow_archived=false&limit=1&sort=id:desc` -> one spool
     and `x-total-count`
 14. `GET /api/v1/location` -> array of strings
+15. filament database (6.4): `GET /api/v1/external/manufacturer` -> `200`
+    with a well formed index, and `GET /api/v1/external/filament?manufacturer=
+    <name>&material=<name>` -> entries of exactly that maker and material;
+    or the search probe -> `200`, a page of at most 100 entries that all carry
+    the words, and the whole list; or `404` on both. Every entry well formed
+16. `GET /api/v1/external/material` -> array with `material` and `density`,
+    or `404`
+17. with `--write` (6.5): `POST /api/v1/vendor` -> `id`;
+    `GET /api/v1/vendor?name="<exact>"` finds it; `POST /api/v1/filament` with
+    `external_id` and `article_number` -> `id`; `GET /api/v1/filament?
+    external_id="..."` and `?article_number="..."` find it, an unknown value
+    gives `[]`; `POST /api/v1/spool` -> `id`; then the three are deleted
+    again. Without `DELETE` routes the checker names what it left behind
 
 ## 10. Versions and planned additions
 
@@ -437,17 +591,6 @@ Contract version 1. A change that breaks a server gets a new version and an
 entry in the [changelog](../CHANGELOG.md); the scale keeps working against the
 previous version for at least one firmware release.
 
-**Planned, firmware 0.8.3 (in development, not released, no requirement level
-yet).** The scale will create a spool from the data on a Bambu Lab tag or from
-Spoolman's filament database when the tag is unknown. It then asks:
-
-| Request | Purpose |
-|---|---|
-| `GET /api/v1/vendor?name=<exact>` | find the maker; `POST /api/v1/vendor` `{"name", "empty_spool_weight"}` creates it |
-| `GET /api/v1/filament?<filter>` | find the filament by `article_number`, `external_id`, or vendor, material and colour |
-| `POST /api/v1/filament` | create it: `name`, `vendor_id`, `material`, `density`, `diameter`, `color_hex`, and where known `weight`, `spool_weight`, `article_number`, `external_id`, `settings_extruder_temp`, `settings_bed_temp` |
-| `GET /api/v1/external/filament/search?limit=N&query=<words>`, `GET /api/v1/external/material` | SpoolmanDB lookups for the product and the density |
-| `POST /api/v1/spool` | as in 7.2 |
-
-A server without the SpoolmanDB lookups answers `404` and the scale uses the
-tag's own values. The exact filters and levels are fixed when 0.8.3 ships.
+Sections 6.4 and 6.5 joined with firmware 0.8.3. Everything in them is optional
+for a server, so the version stayed 1: a server written for the first
+publication keeps working, only without the new spools.

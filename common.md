@@ -10,7 +10,7 @@ The key words MUST, SHOULD and MAY are used as in RFC 2119. Sections marked
 
 | Part | Covers | Version | Firmware |
 |---|---|---|---|
-| 1, [Inventory](inventory/spec.md) | spools, filaments, tags, weights: a subset of the Spoolman 0.27 REST API | 1 | 0.8.2 and later |
+| 1, [Inventory](inventory/spec.md) | spools, filaments, tags, weights: a subset of the Spoolman 0.27 REST API; the filament database and new spools from 0.8.3 | 1 | 0.8.2 and later |
 | 2, [AMS source](ams-source/spec.md) | printers, their AMS units and trays, assigning a spool to a tray | draft | not released |
 
 - Each part has its own version, an integer. A change that breaks an existing

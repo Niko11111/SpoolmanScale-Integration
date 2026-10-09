@@ -6,9 +6,10 @@
 
 Read-only without --write. With --write it changes spool A (and B for the tag
 conflict) and puts remaining weight, initial weight, location and tags back the
-way it found them; last_used moves to now. Exit code 0 means every MUST
-passed; SHOULD findings print as warnings. Python 3.9, standard library only,
-so it runs on the machine the server runs on.
+way it found them; last_used moves to now. It also creates a maker, a filament
+and a spool the way the scale does (section 6.5) and deletes them again. Exit
+code 0 means every MUST passed; SHOULD findings print as warnings. Python 3.9,
+standard library only, so it runs on the machine the server runs on.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import inventory_rules as rules  # noqa: E402
+from database_checks import DatabaseRun  # noqa: E402
 from httpcheck import Client, Report, auth_from  # noqa: E402
 
 # A UID no chip carries, in the spelling the scale sends (section 5).
@@ -60,6 +62,7 @@ class Run:
         self.measure()
         self.stamp()
         self.locations()
+        DatabaseRun(self.c, self.r, self.args).all()
         self.redirects()
 
     # -- reads ---------------------------------------------------------------

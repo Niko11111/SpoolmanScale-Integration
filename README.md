@@ -28,7 +28,8 @@ install.
 python3 check/check_inventory.py http://inventory.local:7912
 
 # with the writes, on two spools you can spare; weight, location and tags
-# are put back afterwards, last_used moves to now
+# are put back afterwards, last_used moves to now. --write also creates a
+# maker "SpoolmanScale check", a filament and a spool, and deletes them again
 python3 check/check_inventory.py http://inventory.local:7912 --write --spool 12 --spool-b 13
 
 # with a key, or --bearer TOKEN, or --basic USER:PASSWORD
@@ -39,6 +40,11 @@ python3 check/check_ams_source.py http://bridge.local:8001
 ```
 
 Exit code 0 means every MUST passed. SHOULD findings print as warnings.
+
+`examples/light_form_proxy.py` is a reference of the light form of the
+filament database (Part 1, section 6.4): it answers the two light-form
+routes from a list of entries and passes everything else through to the
+inventory server behind it.
 
 ## Questions and changes
 
