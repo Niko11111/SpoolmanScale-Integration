@@ -2,7 +2,9 @@
 
 SpoolmanScale works with any server that implements this specification. You
 do not need to ask anyone: implement [Part 1](inventory/spec.md), run the
-checker, and every scale can use your server today.
+checker, and every scale can use your server today. Where it runs is up to
+you: on the user's own network, as Spoolman, FilaMan and BamBuddy do, or as an
+online service over HTTPS.
 
 If you want more than compatibility, we can work together. A partner server
 is not just reachable from the scale, it is part of it.

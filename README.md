@@ -1,8 +1,9 @@
 # SpoolmanScale Integration
 
 How to serve a [SpoolmanScale](https://github.com/Niko11111/SpoolmanScale)
-from your own software: a filament inventory, a printer bridge, or both. The
-scale talks HTTP to the servers the user enters. This repository says exactly
+from your own software: a filament inventory, a printer bridge, or both,
+running on the user's own network or online over HTTPS. The scale talks HTTP
+to the servers the user enters. This repository says exactly
 what it sends and what it expects back, so no driver for your system has to
 live in the firmware.
 
