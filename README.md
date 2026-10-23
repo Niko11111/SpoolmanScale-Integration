@@ -46,6 +46,12 @@ filament database (Part 1, section 6.4): it answers the two light-form
 routes from a list of entries and passes everything else through to the
 inventory server behind it.
 
+## Partner servers
+
+Compatible is enough to work with every scale. If you want your server to
+appear on the scale by name, with your colours, a page in the manual and a
+test before every release, see [PARTNERS.md](PARTNERS.md).
+
 ## Questions and changes
 
 Open an issue in this repository. A change to a part goes through this
