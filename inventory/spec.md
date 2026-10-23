@@ -465,8 +465,9 @@ Fields the scale uses:
 | Key | On | Content | When |
 |---|---|---|---|
 | `last_dried` | spool | ISO 8601 UTC | user logs a drying |
-| `tag` | spool | plain hex UID or tray UUID | 5.2, or as a copy of the tray UUID for OpenSpoolman (switch) |
-| `nfc_id`, `card_uids` | spool | hex UID, or comma list | only if the user picked them as tag field |
+| `tag` | spool | plain hex UID or tray UUID | 5.2, or as companion field beside native tags (below) |
+| `nfc_id` | spool | plain hex UID, or a Bambu spool's tray UUID | if the user picked it as tag field, or as companion field |
+| `card_uids` | spool | comma list of hex UIDs | only if the user picked it as tag field |
 | `rfid_tag` | spool | comma list of hex chip UIDs | Happy Hare MMU gates (switch) |
 | `drying` | filament | text such as `55 °C, 8 h` | from Bambu tags |
 
@@ -474,6 +475,19 @@ The scale creates its spool fields before the first write when the field list
 does not have them. The filament field `drying` it creates after a `400` and
 retries once. The scale also reads other text fields of a spool (up to 16) as
 possible tag UIDs.
+
+**Companion field** (firmware 0.8.3 and later). With native tags (5.1) the
+user can have the scale keep one extra field in step for other tools: off (the
+default), `tag` or `nfc_id`. `tag` gets a Bambu spool's tray UUID only, the
+value OpenSpoolman looks for; other tags leave it alone. `nfc_id` gets the tray
+UUID of a Bambu spool and the chip UID of any other tag. The scale writes the
+field once, on the first link of a spool, not for further tags. Firmware 0.8.2
+had a switch for `tag` alone; 0.8.3 takes its setting over.
+
+**Unlinking** one tag takes its UID out of every tag field of the spool that
+names it, compared normalised as in section 5: a single-value field is
+cleared, a list keeps its other entries. Values a field held before a native
+link stay, so other tools can still read them.
 
 ### 7.2 More writes
 

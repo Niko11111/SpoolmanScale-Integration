@@ -264,6 +264,9 @@ text.
 - After an assignment the scale MAY also set the spool's `location` in the
   inventory to the unit's name ("X1C AMS 1"), when the user switched that on.
   That is a Part 1 write, not a request to the source.
+- After taking a spool out, the scale offers the location list. Closed without
+  a choice, it clears a location that still names the unit
+  (`{"location": null}`, Part 1); a location the user named stays.
 
 ## 10. Checklist
 
