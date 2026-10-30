@@ -49,9 +49,10 @@ inventory server behind it.
 
 ## Partner servers
 
-Compatible is enough to work with every scale. If you want your server to
-appear on the scale by name, with your colours, a page in the manual and a
-test before every release, see [PARTNERS.md](PARTNERS.md).
+Compatible is enough to work with every scale. Self-hosted and small projects
+can appear on the scale by name, with their colours and a page in the manual,
+by pull request; larger servers can become partners, with a test before every
+release. See [PARTNERS.md](PARTNERS.md).
 
 ## Questions and changes
 
